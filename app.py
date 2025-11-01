@@ -1,166 +1,126 @@
 import streamlit as st
-import pandas as pd
-import pandas_ta as ta
-import yfinance as yf
-import numpy as np
-import datetime
-
-# Import library untuk Machine Learning (Regresi Linier)
-from sklearn.linear_model import LinearRegression
+import google.generativeai as genai
+from PIL import Image
+import io
 
 # --- Konfigurasi Halaman ---
 st.set_page_config(
-    page_title="Analisis & Prediksi Teknikal (Lanjutan)",
-    page_icon="🚀",
-    layout="wide"
+    page_title="Analisis Trading AI",
+    page_icon="📈",
+    layout="centered"
 )
 
-# --- Judul Aplikasi ---
-st.title("🚀 Aplikasi Analisis Teknikal Lanjutan")
-st.caption("Analisis (SMA, RSI, MACD, BBANDS, STOCH) & Prediksi Tren (Regresi Linier)")
+# --- Judul ---
+st.title("Analisis Indikator Trading AI 📈")
+st.markdown("Unggah screenshot chart Anda, dan AI (Gemini) akan menganalisisnya.")
 
-# --- Sidebar (Input dari User) ---
-st.sidebar.header("Input Parameter")
+# --- Penanganan API Key ---
+# PENTING: Untuk deploy, gunakan Streamlit Secrets!
+# Buat file .streamlit/secrets.toml dan tambahkan:
+# GOOGLE_API_KEY = "API_KEY_ANDA_DI_SINI"
+#
+# Untuk pengembangan lokal, Streamlit akan membaca file secrets.toml tersebut.
+# Atau, masukkan manual di bawah jika file secrets tidak ada.
 
-# Input Ticker
-ticker = st.sidebar.text_input("Simbol Ticker", "BBCA.JK")
-st.sidebar.caption("Contoh: BBCA.JK (Jakarta), BTC-USD (Crypto), AAPL (US)")
+try:
+    # Mencoba mengambil API key dari Streamlit Secrets (untuk production/deployment)
+    api_key = st.secrets["GOOGLE_API_KEY"]
+except (KeyError, FileNotFoundError):
+    # Fallback untuk pengembangan lokal jika secrets.toml tidak ada
+    st.warning("File `.streamlit/secrets.toml` tidak ditemukan atau tidak berisi `GOOGLE_API_KEY`.")
+    api_key = st.text_input("Masukkan Google API Key Anda:", type="password", help="Dapatkan API key Anda dari Google AI Studio.")
 
-# Input Tanggal
-today = datetime.date.today()
-start_date = st.sidebar.date_input('Tanggal Mulai', today - datetime.timedelta(days=365*2))
-end_date = st.sidebar.date_input('Tanggal Selesai', today)
+if not api_key:
+    st.error("Harap masukkan Google API Key Anda untuk melanjutkan.")
+    st.stop() # Menghentikan eksekusi jika tidak ada API key
 
-# Input untuk berapa hari prediksi
-pred_days = st.sidebar.slider("Hari Prediksi ke Depan", 1, 90, 30)
+# --- Konfigurasi Model AI ---
+try:
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-2.5-flash-preview-09-2025')
+except Exception as e:
+    st.error(f"Gagal mengkonfigurasi Google AI. Pastikan API Key Anda valid. Error: {e}")
+    st.stop()
 
-# Tombol untuk Menjalankan
-run_button = st.sidebar.button("Jalankan Analisis Lengkap")
+# --- Sistem Prompt untuk AI ---
+# (Ini adalah instruksi yang sama dari versi HTML)
+system_prompt = """Anda adalah seorang analis teknikal trading AI yang ahli. 
+Tugas utama Anda adalah menganalisis gambar screenshot chart trading yang diberikan dan secara proaktif mengidentifikasi pola indikator untuk memprediksi sinyal bullish atau bearish.
+Pengguna akan memberikan konteks timeframe (misal: '1 Menit', '1 Jam', '1 Hari'). Gunakan informasi timeframe ini untuk menyempurnakan analisis Anda. Timeframe yang lebih pendek (scalping) memiliki implikasi yang berbeda dari timeframe harian (swing).
 
-# --- Area Utama Aplikasi ---
-if run_button:
-    # 1. Ambil Data
-    st.header(f"Analisis & Prediksi untuk: {ticker}")
-    try:
-        data = yf.download(ticker, start=start_date, end=end_date)
-        if data.empty:
-            st.error("Gagal mengambil data. Periksa kembali simbol Ticker.")
-            st.stop() 
-    except Exception as e:
-        st.error(f"Terjadi error saat mengambil data: {e}")
-        st.stop()
+Fokus pada:
+1.  **Analisis Indikator:** Cari sinyal di RSI (overbought, oversold, divergence), MACD (crossover, divergence), Moving Averages (golden cross, death cross), Bollinger Bands (squeeze, breakout).
+2.  **Analisis Pola Candlestick:** Identifikasi pola reversal atau continuation (doji, hammer, engulfing).
+3.  **Analisis Pola Chart:** Cari pola yang lebih besar (double top/bottom, head and shoulders, triangles, wedges).
+4.  **Volume:** Analisis volume untuk mengkonfirmasi kekuatan sinyal.
 
-    df = data.copy()
+**PENTING:** Jika ada pola chart yang jelas atau level support/resistance yang terlihat, coba identifikasi potensi target pergerakan harga atau level penting dalam analisis Anda. Namun, **TEGASKAN BAHWA INI SANGAT SPEKULATIF DAN HANYA BERDASARKAN VISUAL, BUKAN DATA REAL-TIME.** AI tidak memiliki akses ke data harga langsung atau fundamental pasar.
 
-    # --- PERBAIKAN UNTUK MultiIndex dan KeyError ---
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-        
-    df.columns = df.columns.str.lower()
-    # -----------------------------------------------------------------
+Setelah menganalisis semua ini, berikan kesimpulan prediksi: **BULLISH**, **BEARISH**, atau **NETRAL/SIDEWAYS**.
+Jelaskan alasan Anda secara ringkas dan jelas berdasarkan apa yang Anda lihat di gambar.
 
+Selalu akhiri dengan peringatan bahwa ini bukan nasihat keuangan (DYOR).
+Jawab dalam Bahasa Indonesia.
+"""
 
-    # --- BAGIAN MACHINE LEARNING (PREDIKSI TREN) ---
-    st.subheader(f"Prediksi Tren untuk {pred_days} Hari ke Depan")
+# --- UI Aplikasi Streamlit ---
 
-    X = np.arange(len(df)).reshape(-1, 1) 
-    y = df['close'] 
-    model = LinearRegression()
-    model.fit(X, y)
+# 1. Input Gambar
+uploaded_file = st.file_uploader("Pilih Gambar Screenshot", type=["jpg", "jpeg", "png"])
 
-    last_day_index = len(df) - 1
-    future_indices = np.arange(last_day_index + 1, last_day_index + 1 + pred_days).reshape(-1, 1)
-    future_predictions = model.predict(future_indices)
-
-    last_date = df.index[-1]
-    future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=pred_days)
-    pred_df = pd.DataFrame(future_predictions, index=future_dates, columns=['Prediksi Tren'])
-    df_plot = pd.concat([df[['close']], pred_df])
+if uploaded_file is not None:
+    # 2. Pratinjau Gambar
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Gambar yang Diunggah", use_column_width=True)
     
-    st.line_chart(df_plot)
-    st.caption("Catatan: Ini adalah prediksi Regresi Linier, yang hanya menunjukkan tren garis lurus.")
-    
-    st.write("---") # Pemisah
-
-    # --- BAGIAN ANALISIS TEKNIKAL ---
-    st.header("Analisis Indikator Teknikal")
-
-    # 2. Hitung Indikator
-    df.ta.sma(length=10, col_names="SMA_10", append=True)
-    df.ta.sma(length=20, col_names="SMA_20", append=True)
-    df.ta.rsi(length=14, col_names="RSI_14", append=True)
-    df.ta.macd(fast=12, slow=26, signal=9, col_names=("MACD", "MACD_hist", "MACD_signal"), append=True)
-    df.ta.bbands(length=20, col_names=("BB_Lower", "BB_Mid", "BB_Upper", "BB_Bandwidth", "BB_Percent"), append=True)
-    
-    # -----------------------------------------------------------------
-    # --- BARU: Pemeriksaan untuk Stochastic ---
-    stoch_required_cols = {'high', 'low', 'close'}
-    
-    if stoch_required_cols.issubset(df.columns):
-        # HANYA JALANKAN JIKA KITA PUNYA KOLOM HIGH, LOW, CLOSE
-        df.ta.stoch(k=14, d=3, col_names=("STOCH_K", "STOCH_D"), append=True)
-    else:
-        st.warning(f"Tidak dapat menghitung Stochastic. Data ticker '{ticker}' tidak memiliki kolom 'High' atau 'Low'.")
-    # -----------------------------------------------------------------
-
-    
-    # 3. Buat Sinyal (Logika Kombinasi)
-    df['Sinyal_SMA_RSI'] = np.where(
-        (df['SMA_10'] > df['SMA_20']) & (df['RSI_14'] < 45), 'BELI (Buy the Dip)',
-        np.where(
-            (df['SMA_10'] < df['SMA_20']) & (df['RSI_14'] > 55), 'JUAL (Sell the Rally)',
-            'TAHAN' 
-        )
+    # 3. Pilih Timeframe
+    timeframe = st.selectbox(
+        "Pilih Timeframe Chart",
+        ("1 Menit", "5 Menit", "15 Menit", "30 Menit", "1 Jam", "4 Jam", "1 Hari", "1 Minggu", "Lainnya / Tidak Tahu"),
+        index=4  # Default ke '1 Jam'
     )
 
-    # 4. Tampilkan Sinyal Terkini
-    st.subheader("Sinyal Terkini (Strategi SMA/RSI)")
-    sinyal_terkini = df['Sinyal_SMA_RSI'].iloc[-1]
-    
-    if sinyal_terkini.startswith('BELI'):
-        st.success(f"**{sinyal_terkini}**")
-    elif sinyal_terkini.startswith('JUAL'):
-        st.error(f"**{sinyal_terkini}**")
-    else:
-        st.info(f"**{sinyal_terkini}**")
+    # 4. Tombol Analisis
+    if st.button("Analisis Sekarang"):
+        # Tampilkan loader
+        with st.spinner("AI sedang menganalisis gambar Anda..."):
+            try:
+                # Buat prompt pengguna
+                user_prompt = f"Lakukan analisis prediktif (bullish/bearish) pada gambar chart ini. Konteks timeframe adalah: {timeframe}."
+                
+                # Siapkan 'contents' untuk API
+                contents = [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": user_prompt},
+                            {"inline_data": {
+                                "mime_type": uploaded_file.type,
+                                "data": uploaded_file.getvalue()
+                            }}
+                        ]
+                    }
+                ]
+                
+                # Panggil API
+                response = model.generate_content(
+                    contents,
+                    system_instruction=system_prompt
+                )
+                
+                # 5. Tampilkan Hasil
+                st.subheader("Hasil Analisis AI:")
+                st.markdown(response.text)
+                
+                # Tampilkan Peringatan
+                st.warning(
+                    "**Peringatan Penting:** Prediksi target harga atau pergerakan spesifik oleh AI hanya berdasarkan "
+                    "analisis visual gambar statis dan sangat spekulatif. JANGAN gunakan ini sebagai dasar keputusan "
+                    "trading Anda. AI TIDAK memiliki akses ke data harga real-time atau informasi pasar terkini.\n\n"
+                    "*Ini adalah analisis AI dan bukan nasihat keuangan. Selalu lakukan riset Anda sendiri (DYOR).*"
+                )
 
-    # 5. Tampilkan Grafik Indikator
-    
-    st.subheader("Grafik Harga, SMA, dan Bollinger Bands")
-    st.line_chart(df[['close', 'SMA_10', 'SMA_20', 'BB_Lower', 'BB_Upper']])
-
-    st.subheader("Grafik Indikator Momentum")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.write("RSI (Relative Strength Index)")
-        rsi_data = df[['RSI_14']].copy()
-        rsi_data['Overbought (70)'] = 70
-        rsi_data['Oversold (30)'] = 30
-        st.line_chart(rsi_data)
-
-    with col2:
-        st.write("Stochastic (Overbought > 80, Oversold < 20)")
-        
-        # -----------------------------------------------------------------
-        # --- PERBAIKAN FINAL: Cek langsung jika kolomnya ada ---
-        # Kita tidak lagi pakai 'stoch_calculated'
-        if 'STOCH_K' in df.columns and 'STOCH_D' in df.columns:
-            stoch_data = df[['STOCH_K', 'STOCH_D']].copy()
-            stoch_data['Overbought (80)'] = 80
-            stoch_data['Oversold (20)'] = 20
-            st.line_chart(stoch_data)
-        else:
-            st.info("Stochastic tidak dapat ditampilkan (data 'high'/'low' tidak ada atau gagal dihitung).")
-        # -----------------------------------------------------------------
-
-    st.subheader("Grafik MACD")
-    st.line_chart(df[['MACD', 'MACD_signal']])
-    st.bar_chart(df[['MACD_hist']])
-    
-    # 6. Tampilkan Data Mentah
-    st.subheader(f"Data Lengkap (10 Hari Terakhir)")
-    st.dataframe(df.tail(10))
-
+            except Exception as e:
+                st.error(f"Terjadi kesalahan saat menghubungi API Gemini: {e}")
 else:
-    st.info("Silakan masukkan Ticker di sidebar dan klik 'Jalankan Analisis Lengkap'.")
+    st.info("Silakan unggah gambar untuk memulai analisis.")
