@@ -86,7 +86,6 @@ if run_button:
     st.header("Analisis Indikator Teknikal")
 
     # 2. Hitung Indikator
-    # Indikator ini (SMA, RSI, MACD, BBANDS) hanya butuh 'close', jadi aman
     df.ta.sma(length=10, col_names="SMA_10", append=True)
     df.ta.sma(length=20, col_names="SMA_20", append=True)
     df.ta.rsi(length=14, col_names="RSI_14", append=True)
@@ -96,12 +95,10 @@ if run_button:
     # -----------------------------------------------------------------
     # --- BARU: Pemeriksaan untuk Stochastic ---
     stoch_required_cols = {'high', 'low', 'close'}
-    stoch_calculated = False # Buat "penanda"
     
     if stoch_required_cols.issubset(df.columns):
         # HANYA JALANKAN JIKA KITA PUNYA KOLOM HIGH, LOW, CLOSE
         df.ta.stoch(k=14, d=3, col_names=("STOCH_K", "STOCH_D"), append=True)
-        stoch_calculated = True # Set penanda jadi True
     else:
         st.warning(f"Tidak dapat menghitung Stochastic. Data ticker '{ticker}' tidak memiliki kolom 'High' atau 'Low'.")
     # -----------------------------------------------------------------
@@ -146,14 +143,15 @@ if run_button:
         st.write("Stochastic (Overbought > 80, Oversold < 20)")
         
         # -----------------------------------------------------------------
-        # --- BARU: Hanya tampilkan grafik JIKA Stochastic berhasil dihitung ---
-        if stoch_calculated:
+        # --- PERBAIKAN FINAL: Cek langsung jika kolomnya ada ---
+        # Kita tidak lagi pakai 'stoch_calculated'
+        if 'STOCH_K' in df.columns and 'STOCH_D' in df.columns:
             stoch_data = df[['STOCH_K', 'STOCH_D']].copy()
             stoch_data['Overbought (80)'] = 80
             stoch_data['Oversold (20)'] = 20
             st.line_chart(stoch_data)
         else:
-            st.info("Stochastic tidak dapat ditampilkan (data 'high'/'low' tidak ada).")
+            st.info("Stochastic tidak dapat ditampilkan (data 'high'/'low' tidak ada atau gagal dihitung).")
         # -----------------------------------------------------------------
 
     st.subheader("Grafik MACD")
