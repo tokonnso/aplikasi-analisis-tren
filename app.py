@@ -53,13 +53,10 @@ if run_button:
     df = data.copy()
 
     # --- PERBAIKAN UNTUK MultiIndex dan KeyError ---
-    # 1. Ratakan (flatten) MultiIndex jika ada
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
         
-    # 2. BARU: Ubah semua nama kolom jadi lowercase agar pandas-ta bisa baca
     df.columns = df.columns.str.lower()
-    # Sekarang kita punya kolom 'open', 'high', 'low', 'close', 'volume'
     # -----------------------------------------------------------------
 
 
@@ -67,7 +64,6 @@ if run_button:
     st.subheader(f"Prediksi Tren untuk {pred_days} Hari ke Depan")
 
     X = np.arange(len(df)).reshape(-1, 1) 
-    # BARU: Gunakan 'close' (huruf kecil)
     y = df['close'] 
     model = LinearRegression()
     model.fit(X, y)
@@ -79,8 +75,6 @@ if run_button:
     last_date = df.index[-1]
     future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=pred_days)
     pred_df = pd.DataFrame(future_predictions, index=future_dates, columns=['Prediksi Tren'])
-    
-    # BARU: Gunakan 'close' (huruf kecil)
     df_plot = pd.concat([df[['close']], pred_df])
     
     st.line_chart(df_plot)
@@ -92,13 +86,26 @@ if run_button:
     st.header("Analisis Indikator Teknikal")
 
     # 2. Hitung Indikator
-    # (Sekarang akan berhasil karena ada 'high', 'low', 'close')
+    # Indikator ini (SMA, RSI, MACD, BBANDS) hanya butuh 'close', jadi aman
     df.ta.sma(length=10, col_names="SMA_10", append=True)
     df.ta.sma(length=20, col_names="SMA_20", append=True)
     df.ta.rsi(length=14, col_names="RSI_14", append=True)
     df.ta.macd(fast=12, slow=26, signal=9, col_names=("MACD", "MACD_hist", "MACD_signal"), append=True)
     df.ta.bbands(length=20, col_names=("BB_Lower", "BB_Mid", "BB_Upper", "BB_Bandwidth", "BB_Percent"), append=True)
-    df.ta.stoch(k=14, d=3, col_names=("STOCH_K", "STOCH_D"), append=True)
+    
+    # -----------------------------------------------------------------
+    # --- BARU: Pemeriksaan untuk Stochastic ---
+    stoch_required_cols = {'high', 'low', 'close'}
+    stoch_calculated = False # Buat "penanda"
+    
+    if stoch_required_cols.issubset(df.columns):
+        # HANYA JALANKAN JIKA KITA PUNYA KOLOM HIGH, LOW, CLOSE
+        df.ta.stoch(k=14, d=3, col_names=("STOCH_K", "STOCH_D"), append=True)
+        stoch_calculated = True # Set penanda jadi True
+    else:
+        st.warning(f"Tidak dapat menghitung Stochastic. Data ticker '{ticker}' tidak memiliki kolom 'High' atau 'Low'.")
+    # -----------------------------------------------------------------
+
     
     # 3. Buat Sinyal (Logika Kombinasi)
     df['Sinyal_SMA_RSI'] = np.where(
@@ -123,7 +130,6 @@ if run_button:
     # 5. Tampilkan Grafik Indikator
     
     st.subheader("Grafik Harga, SMA, dan Bollinger Bands")
-    # BARU: Gunakan 'close' (huruf kecil)
     st.line_chart(df[['close', 'SMA_10', 'SMA_20', 'BB_Lower', 'BB_Upper']])
 
     st.subheader("Grafik Indikator Momentum")
@@ -138,11 +144,17 @@ if run_button:
 
     with col2:
         st.write("Stochastic (Overbought > 80, Oversold < 20)")
-        # Baris ini (sekarang sekitar baris 150) seharusnya sudah aman
-        stoch_data = df[['STOCH_K', 'STOCH_D']].copy()
-        stoch_data['Overbought (80)'] = 80
-        stoch_data['Oversold (20)'] = 20
-        st.line_chart(stoch_data)
+        
+        # -----------------------------------------------------------------
+        # --- BARU: Hanya tampilkan grafik JIKA Stochastic berhasil dihitung ---
+        if stoch_calculated:
+            stoch_data = df[['STOCH_K', 'STOCH_D']].copy()
+            stoch_data['Overbought (80)'] = 80
+            stoch_data['Oversold (20)'] = 20
+            st.line_chart(stoch_data)
+        else:
+            st.info("Stochastic tidak dapat ditampilkan (data 'high'/'low' tidak ada).")
+        # -----------------------------------------------------------------
 
     st.subheader("Grafik MACD")
     st.line_chart(df[['MACD', 'MACD_signal']])
