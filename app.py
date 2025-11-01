@@ -52,12 +52,14 @@ if run_button:
 
     df = data.copy()
 
-    # -----------------------------------------------------------------
-    # --- BARU: PERBAIKAN UNTUK ERROR MultiIndex ---
-    # Jika yfinance mengembalikan MultiIndex (misal: [('Close', 'BBCA.JK')]),
-    # kita ratakan (flatten) menjadi single index (misal: ['Close'])
+    # --- PERBAIKAN UNTUK MultiIndex dan KeyError ---
+    # 1. Ratakan (flatten) MultiIndex jika ada
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
+        
+    # 2. BARU: Ubah semua nama kolom jadi lowercase agar pandas-ta bisa baca
+    df.columns = df.columns.str.lower()
+    # Sekarang kita punya kolom 'open', 'high', 'low', 'close', 'volume'
     # -----------------------------------------------------------------
 
 
@@ -65,7 +67,8 @@ if run_button:
     st.subheader(f"Prediksi Tren untuk {pred_days} Hari ke Depan")
 
     X = np.arange(len(df)).reshape(-1, 1) 
-    y = df['Close'] 
+    # BARU: Gunakan 'close' (huruf kecil)
+    y = df['close'] 
     model = LinearRegression()
     model.fit(X, y)
 
@@ -76,7 +79,9 @@ if run_button:
     last_date = df.index[-1]
     future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=pred_days)
     pred_df = pd.DataFrame(future_predictions, index=future_dates, columns=['Prediksi Tren'])
-    df_plot = pd.concat([df[['Close']], pred_df])
+    
+    # BARU: Gunakan 'close' (huruf kecil)
+    df_plot = pd.concat([df[['close']], pred_df])
     
     st.line_chart(df_plot)
     st.caption("Catatan: Ini adalah prediksi Regresi Linier, yang hanya menunjukkan tren garis lurus.")
@@ -86,7 +91,8 @@ if run_button:
     # --- BAGIAN ANALISIS TEKNIKAL ---
     st.header("Analisis Indikator Teknikal")
 
-    # 2. Hitung Indikator (Cara yang kompatibel)
+    # 2. Hitung Indikator
+    # (Sekarang akan berhasil karena ada 'high', 'low', 'close')
     df.ta.sma(length=10, col_names="SMA_10", append=True)
     df.ta.sma(length=20, col_names="SMA_20", append=True)
     df.ta.rsi(length=14, col_names="RSI_14", append=True)
@@ -117,7 +123,8 @@ if run_button:
     # 5. Tampilkan Grafik Indikator
     
     st.subheader("Grafik Harga, SMA, dan Bollinger Bands")
-    st.line_chart(df[['Close', 'SMA_10', 'SMA_20', 'BB_Lower', 'BB_Upper']])
+    # BARU: Gunakan 'close' (huruf kecil)
+    st.line_chart(df[['close', 'SMA_10', 'SMA_20', 'BB_Lower', 'BB_Upper']])
 
     st.subheader("Grafik Indikator Momentum")
     col1, col2 = st.columns(2)
@@ -131,6 +138,7 @@ if run_button:
 
     with col2:
         st.write("Stochastic (Overbought > 80, Oversold < 20)")
+        # Baris ini (sekarang sekitar baris 150) seharusnya sudah aman
         stoch_data = df[['STOCH_K', 'STOCH_D']].copy()
         stoch_data['Overbought (80)'] = 80
         stoch_data['Oversold (20)'] = 20
