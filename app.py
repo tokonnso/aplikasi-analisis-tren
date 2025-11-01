@@ -78,24 +78,22 @@ if run_button:
     st.header("Analisis Indikator Teknikal")
 
     # 2. Hitung Indikator (Strategi Diperbarui)
-    MyStrategy = ta.Strategy(
-        name="Strategi Analisis Lengkap",
-        ta=[
-            {"kind": "sma", "length": 10, "col_names": "SMA_10"},
-            {"kind": "sma", "length": 20, "col_names": "SMA_20"},
-            {"kind": "rsi", "length": 14, "col_names": "RSI_14"},
-            {"kind": "macd", "fast": 12, "slow": 26, "signal": 9, "col_names": ("MACD", "MACD_hist", "MACD_signal")},
-            
-            # --- INDIKATOR BARU ---
-            {"kind": "bbands", "length": 20, "col_names": ("BB_Lower", "BB_Mid", "BB_Upper", "BB_Bandwidth", "BB_Percent")},
-            {"kind": "stoch", "k": 14, "d": 3, "col_names": ("STOCH_K", "STOCH_D")}
-        ]
-    )
-    df.ta.strategy(MyStrategy)
+    # -----------------------------------------------------------------
+    # KODE BARU DI SINI: Kita panggil satu per satu
+    # Ini untuk menghindari error ta.Strategy di versi lama
+    
+    df.ta.sma(length=10, col_names="SMA_10", append=True)
+    df.ta.sma(length=20, col_names="SMA_20", append=True)
+    df.ta.rsi(length=14, col_names="RSI_14", append=True)
+    df.ta.macd(fast=12, slow=26, signal=9, col_names=("MACD", "MACD_hist", "MACD_signal"), append=True)
+    df.ta.bbands(length=20, col_names=("BB_Lower", "BB_Mid", "BB_Upper", "BB_Bandwidth", "BB_Percent"), append=True)
+    
+    # Stochastic (STOCH) membutuhkan kolom High, Low, Close (HLC)
+    # Pastikan data yfinance memilikinya (seharusnya ada)
+    df.ta.stoch(k=14, d=3, col_names=("STOCH_K", "STOCH_D"), append=True)
+    # -----------------------------------------------------------------
     
     # 3. Buat Sinyal (Logika Kombinasi)
-    # Kita tetap gunakan sinyal sederhana, karena menggabungkan 5 indikator
-    # memerlukan logika yang sangat kompleks (expert system)
     df['Sinyal_SMA_RSI'] = np.where(
         (df['SMA_10'] > df['SMA_20']) & (df['RSI_14'] < 45), 'BELI (Buy the Dip)',
         np.where(
@@ -117,18 +115,13 @@ if run_button:
 
     # 5. Tampilkan Grafik Indikator
     
-    # Chart 1: Harga, SMA, dan Bollinger Bands
     st.subheader("Grafik Harga, SMA, dan Bollinger Bands")
-    
-
     st.line_chart(df[['Close', 'SMA_10', 'SMA_20', 'BB_Lower', 'BB_Upper']])
 
-    # Pisahkan Chart Indikator
     st.subheader("Grafik Indikator Momentum")
     col1, col2 = st.columns(2)
 
     with col1:
-        # Chart 2: RSI
         st.write("RSI (Relative Strength Index)")
         rsi_data = df[['RSI_14']].copy()
         rsi_data['Overbought (70)'] = 70
@@ -136,16 +129,12 @@ if run_button:
         st.line_chart(rsi_data)
 
     with col2:
-        # Chart 3: Stochastic
         st.write("Stochastic (Overbought > 80, Oversold < 20)")
-        
-
         stoch_data = df[['STOCH_K', 'STOCH_D']].copy()
         stoch_data['Overbought (80)'] = 80
         stoch_data['Oversold (20)'] = 20
         st.line_chart(stoch_data)
 
-    # Chart 4: MACD
     st.subheader("Grafik MACD")
     st.line_chart(df[['MACD', 'MACD_signal']])
     st.bar_chart(df[['MACD_hist']])
@@ -156,5 +145,3 @@ if run_button:
 
 else:
     st.info("Silakan masukkan Ticker di sidebar dan klik 'Jalankan Analisis Lengkap'.")
-
-
