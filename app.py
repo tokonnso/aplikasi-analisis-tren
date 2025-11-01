@@ -52,6 +52,15 @@ if run_button:
 
     df = data.copy()
 
+    # -----------------------------------------------------------------
+    # --- BARU: PERBAIKAN UNTUK ERROR MultiIndex ---
+    # Jika yfinance mengembalikan MultiIndex (misal: [('Close', 'BBCA.JK')]),
+    # kita ratakan (flatten) menjadi single index (misal: ['Close'])
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    # -----------------------------------------------------------------
+
+
     # --- BAGIAN MACHINE LEARNING (PREDIKSI TREN) ---
     st.subheader(f"Prediksi Tren untuk {pred_days} Hari ke Depan")
 
@@ -77,21 +86,13 @@ if run_button:
     # --- BAGIAN ANALISIS TEKNIKAL ---
     st.header("Analisis Indikator Teknikal")
 
-    # 2. Hitung Indikator (Strategi Diperbarui)
-    # -----------------------------------------------------------------
-    # KODE BARU DI SINI: Kita panggil satu per satu
-    # Ini untuk menghindari error ta.Strategy di versi lama
-    
+    # 2. Hitung Indikator (Cara yang kompatibel)
     df.ta.sma(length=10, col_names="SMA_10", append=True)
     df.ta.sma(length=20, col_names="SMA_20", append=True)
     df.ta.rsi(length=14, col_names="RSI_14", append=True)
     df.ta.macd(fast=12, slow=26, signal=9, col_names=("MACD", "MACD_hist", "MACD_signal"), append=True)
     df.ta.bbands(length=20, col_names=("BB_Lower", "BB_Mid", "BB_Upper", "BB_Bandwidth", "BB_Percent"), append=True)
-    
-    # Stochastic (STOCH) membutuhkan kolom High, Low, Close (HLC)
-    # Pastikan data yfinance memilikinya (seharusnya ada)
     df.ta.stoch(k=14, d=3, col_names=("STOCH_K", "STOCH_D"), append=True)
-    # -----------------------------------------------------------------
     
     # 3. Buat Sinyal (Logika Kombinasi)
     df['Sinyal_SMA_RSI'] = np.where(
