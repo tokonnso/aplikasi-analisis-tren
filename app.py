@@ -121,8 +121,6 @@ if run_button:
     st.subheader("Grafik Harga, SMA, dan Bollinger Bands")
     
 
-[Image of a stock price chart with SMA lines and Bollinger Bands]
-
     st.line_chart(df[['Close', 'SMA_10', 'SMA_20', 'BB_Lower', 'BB_Upper']])
 
     # Pisahkan Chart Indikator
@@ -160,3 +158,4 @@ if run_button:
 
 else:
     st.info("Silakan masukkan Ticker di sidebar dan klik 'Jalankan Analisis Lengkap'.")
+
