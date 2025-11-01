@@ -140,8 +140,6 @@ if run_button:
         st.write("Stochastic (Overbought > 80, Oversold < 20)")
         
 
-[Image of a Stochastic Oscillator chart]
-
         stoch_data = df[['STOCH_K', 'STOCH_D']].copy()
         stoch_data['Overbought (80)'] = 80
         stoch_data['Oversold (20)'] = 20
@@ -158,4 +156,5 @@ if run_button:
 
 else:
     st.info("Silakan masukkan Ticker di sidebar dan klik 'Jalankan Analisis Lengkap'.")
+
 
